@@ -10,10 +10,18 @@ exchangeName = "rule_engine"
 queueName = "rule_engine"
 routeKey = "rule_engine.event"
 
-# redis
+# redis for appKey
 redis_host = "1.1.1.1"
 redis_port = 6379
 redis_passowrd = "367b61b333c242a4253cfacfe6ea709f"  # 0123456789ABCDEF
+
+# redis for nonce
+redisHost = "2.2.2.2"
+redisPort = 6379
+redisPassowrd = "367b61b333c242a4253cfacfe6ea709f"  # 0123456789ABCDEF
+
+
+
 
 # log
 log_path = "/var/log/api_gateway_check_signature_tornado"
@@ -71,7 +79,7 @@ LOGGING_CONFIG = {
 web_thread = 10
 
 # prpcrypt
-key = "keyskeyskeyskeys"
+prpcrypt_key = "keyskeyskeyskeys"
 
 # debug mode
 DEBUG_MODE = False

@@ -36,14 +36,14 @@ class Request:
     def getHost(self):
         return self.__host
 
+    def setHost(self, host):
+        self.__host = host
+
     def setPath(self, path):
         self.__path = path
 
     def getPath(self):
         return self.__path
-
-    def setHost(self, host):
-        self.__host = host
 
     def getAppKey(self):
         return self.__appKey

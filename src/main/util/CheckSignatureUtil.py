@@ -2,6 +2,10 @@
 from urllib import parse
 from .SignUtil import *
 from .LogUtil import *
+from ..Request import *
+from .RedisUtil import *
+from .PrpcryptUtil import *
+from ..config.Config import redis_host, redis_port, redis_passowrd, prpcrypt_key
 
 
 class CheckSignatureUtil:
@@ -11,38 +15,31 @@ class CheckSignatureUtil:
 
     def __init__(self):
         self.__Constants = Constants()
+        self.__HttpHeader = HttpHeader()
+        self.__SystemHeader = SystemHeader()
         self.__logger = LogUtil()
+        self.__redis = RedisDB(redis_host, redis_port, PrpcryptUtil(prpcrypt_key).decrypt(redis_passowrd))
 
     def __tornado_request_handler(self, request, *args, **kwargs):
         """Get arguments from Tornado"""
-        method = uri = ""
-        params = {}
+        __request = Request()
         try:
-            uri = request.protocol + "://" + request.host + request.path
-            method = request.method
-            params = request.arguments
-            if len(request.arguments) > 0:
-                parameters = {}
-                for key, value in params.items():
-                    part = self.__percentEncodeRfc3986(bytes.decode(value[0]))
-                    parameters[key] = part
-                params = parameters
-            else:
-                parameters = {}
-                params = bytes.decode(request.body)
-                arg_list = params.split("&")
-                if len(arg_list) > 1:
-                    for arg in arg_list:
-                        key, value = arg.split("=")
-                        parameters[key] = parse.unquote_plus(
-                            value, encoding=self.__Constants.ENCODING)
-                    params = parameters
-                    # print(params, uri, method)
+            headers = request.headers
+            __request.setMethod(request.method)
+            __request.setHost(request.host)
+            __request.setPath(request.path)
+            __request.setAppKey(headers['X-Ca-Key'])
+            __request.setAppSecret(self.__getAppSecret(headers['X-Ca-Key']))
+            __request.setTimeout(self.__Constants.DEFAULT_TIMEOUT)
+            __request.setHeaders(headers)
+            __request.setQuerys(request.query)
+            __request.setBodys(request.body)
+            __request.setSignHeaderPrefixList(self.__getSignHeaderPrefixList(headers))
         except Exception as err:
             error = str(err)
             self.__logger.error(error)
         finally:
-            return method, uri, params
+            return __request
 
     def __percentEncodeRfc3986(self, s):
         out = None
@@ -60,35 +57,43 @@ class CheckSignatureUtil:
         finally:
             return out
 
-    def check_signature(self, request, client_id, *args, **kwargs):
-        request_method = request_uri = ""
-        params = {}
+    def __getAppSecret(self, AppKey):
+        return self.__redis.getString(AppKey)
+
+    def __getSignHeaderPrefixList(self, headers):
+        default_header = (self.__HttpHeader.HTTP_HEADER_ACCEPT,
+                          self.__HttpHeader.HTTP_HEADER_CONTENT_MD5,
+                          self.__HttpHeader.HTTP_HEADER_CONTENT_TYPE,
+                          self.__HttpHeader.HTTP_HEADER_DATE,
+                          self.__HttpHeader.HTTP_HEADER_USER_AGENT,
+                          self.__SystemHeader.X_CA_KEY,
+                          self.__SystemHeader.X_CA_NONCE,
+                          self.__SystemHeader.X_CA_SIGNATURE,
+                          self.__SystemHeader.X_CA_SIGNATURE_HEADERS,
+                          self.__SystemHeader.X_CA_TIMESTAMP)
+        header_list = headers.keys()
+        for header, value in headers.items():
+            if header in default_header:
+                header_list.remove(header)
+        return header_list
+
+    def checkSignature(self, request, *args, **kwargs):
         try:
-            if framework == "Django":
-                request_method, request_uri, params = self.__djando_request_handler(
-                    request, *args, **kwargs)
-            elif framework == "Tornado":
-                request_method, request_uri, params = self.__tornado_request_handler(
-                    request, *args, **kwargs)
-            elif framework == "Flask":
-                pass
-            else:
-                pass
-            # print(request_method, request_uri, params)
-            if "signature" in params.keys():
-                sign_old = params["signature"]
-                params.pop("signature")
+            __request = self.__tornado_request_handler(request, *args, **kwargs)
+            if __request:
+                headers = request.getHeaders()
+                signature_request = headers[self.__SystemHeader.X_CA_SIGNATURE]
+                headers.pop(self.__SystemHeader.X_CA_SIGNATURE)
+                request.setHeaders(headers)
+
+                signature_recount = SignUtil().sign(request.getAppSecret(), request.getMethod(), request.getPath(), request.getHeaders(),
+                                                    request.getQuerys(), request.getBodys(), request.getSignHeaderPrefixList())
+                if hmac.compare_digest(signature_request, signature_recount):
+                    return True
+                else:
+                    return False
             else:
                 return False
-            sign_check = self.sign(
-                request_method, request_uri, params, client_id)
-            # print("sign_check", sign_check, sign_old)
-            if hmac.compare_digest(sign_old, sign_check):
-                # check pass
-                return True, params
-            else:
-                # check fail
-                return False, params
         except Exception as err:
             error = str(err)
-            self.log.error_msg(error)
+            self.__logger.error(error)

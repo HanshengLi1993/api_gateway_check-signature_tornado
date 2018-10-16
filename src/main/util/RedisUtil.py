@@ -29,7 +29,7 @@ class RedisDB:
             self.__redisObj = None
             self.__logger.error(str(err))
 
-    def insertString(self, key, value, ex=None):
+    def setString(self, key, value, xx=None):
         """
         在Redis中设置值，默认，不存在则创建，存在则修改
         :param key:
@@ -40,7 +40,7 @@ class RedisDB:
         self.__open()
         try:
             if self.__redisObj != None:
-                self.__redisObj.set(name=key, value=value, ex=ex)
+                self.__redisObj.set(name=key, value=value, xx=xx)
         except Exception as err:
             self.__logger.error(str(err))
 

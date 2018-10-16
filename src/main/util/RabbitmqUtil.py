@@ -18,7 +18,7 @@ class RabbitmqProducer:
         self.__routeKey = routeKey
         self.__logger = LogUtil()
 
-    def init_conn(self, data_key):
+    def init_conn(self, appKey):
         conn_broker = None
         try:
             credentials = pika.PlainCredentials(
